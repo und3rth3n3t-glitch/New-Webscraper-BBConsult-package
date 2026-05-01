@@ -1,0 +1,32 @@
+# Build output
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+# .NET
+*.dll.config
+*.pdb
+*.cache
+*.DotSettings.user
+
+# Tests
+TestResults/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# OS
+.DS_Store
+Thumbs.db

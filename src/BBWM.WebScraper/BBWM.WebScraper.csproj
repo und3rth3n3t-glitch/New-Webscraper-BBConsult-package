@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      DEV (this module's own repo, at <repo>/src/BBWM.WebScraper/):
+        cross-repo ref to pharmacy-planet's BBWM.Core.
+        Requires pharmacy-planet checked out at sibling path: c:\Users\und3r\pharmacy-planet
+      INSTALL: copy this folder into a host's modules/ dir, then change this line to:
+        <ProjectReference Include="..\BBWM.Core\BBWM.Core.csproj" />
+    -->
+    <ProjectReference Include="..\..\..\pharmacy-planet\modules\BBWM.Core\BBWM.Core.csproj" />
+  </ItemGroup>
+</Project>
