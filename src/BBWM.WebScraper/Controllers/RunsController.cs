@@ -3,7 +3,6 @@ using BBWM.WebScraper.Dtos;
 using BBWM.WebScraper.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BBWM.WebScraper.Controllers;
@@ -20,25 +19,36 @@ public class RunsController : ControllerBase
         _runs = runs;
     }
 
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateRunDto dto, CancellationToken ct)
-    {
-        var result = await _runs.CreateAndDispatchAsync(HttpContext.GetUserId(), dto.TaskId, dto.WorkerId, ct);
-        return result.Outcome switch
-        {
-            RunDispatchOutcome.Created => CreatedAtAction(nameof(Get), new { id = result.RunItemId }, new { runItemId = result.RunItemId }),
-            RunDispatchOutcome.NotFound => NotFound(new { error = result.Error }),
-            RunDispatchOutcome.Forbidden => StatusCode(StatusCodes.Status403Forbidden, new { error = result.Error }),
-            RunDispatchOutcome.WorkerOffline => Conflict(new { error = result.Error }),
-            RunDispatchOutcome.SendFailed => StatusCode(StatusCodes.Status502BadGateway, new { runItemId = result.RunItemId, error = result.Error }),
-            _ => StatusCode(StatusCodes.Status500InternalServerError),
-        };
-    }
+    [HttpGet]
+    public async Task<IActionResult> List([FromQuery] RunListQueryDto query, CancellationToken ct)
+        => Ok(await _runs.ListAsync(HttpContext.GetUserId(), query, ct));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
         var dto = await _runs.GetAsync(HttpContext.GetUserId(), id, ct);
         return dto is null ? NotFound() : Ok(dto);
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
+    {
+        var outcome = await _runs.CancelAsync(HttpContext.GetUserId(), id, ct);
+        return outcome switch
+        {
+            CancelRunOutcome.Cancelled => NoContent(),
+            CancelRunOutcome.NotFound => NotFound(),
+            CancelRunOutcome.Forbidden => Forbid(),
+            CancelRunOutcome.NotCancellable => Conflict(new { error = "Run is in a terminal state" }),
+            _ => StatusCode(500),
+        };
+    }
+
+    [HttpGet("{id:guid}/csv")]
+    public async Task<IActionResult> ExportCsv(Guid id, CancellationToken ct)
+    {
+        var bytes = await _runs.ExportCsvAsync(HttpContext.GetUserId(), id, ct);
+        if (bytes is null) return NotFound();
+        return File(bytes, "text/csv", $"run-{id}.csv");
     }
 }

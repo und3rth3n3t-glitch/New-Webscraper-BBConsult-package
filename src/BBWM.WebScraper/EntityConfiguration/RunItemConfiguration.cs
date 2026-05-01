@@ -16,12 +16,14 @@ public class RunItemConfiguration : IEntityTypeConfiguration<RunItem>
     {
         e.ToTable("RunItems");
         e.HasKey(x => x.Id);
-        e.Property(x => x.Status).IsRequired().HasMaxLength(32);
+        e.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         e.Property(x => x.PauseReason).HasMaxLength(64);
         e.Property(x => x.CurrentTerm).HasMaxLength(512);
         e.Property(x => x.CurrentStep).HasMaxLength(256);
         e.Property(x => x.Phase).HasMaxLength(32);
+        e.Property(x => x.IterationLabel).HasMaxLength(512);
         e.Property(x => x.ResultJsonb).HasConversion(NullableJsonConverter);
+        e.Property(x => x.IterationAssignments).HasConversion(NullableJsonConverter);
         e.HasOne(x => x.Task)
             .WithMany()
             .HasForeignKey(x => x.TaskId)
@@ -30,7 +32,13 @@ public class RunItemConfiguration : IEntityTypeConfiguration<RunItem>
             .WithMany()
             .HasForeignKey(x => x.WorkerId)
             .OnDelete(DeleteBehavior.Restrict);
+        e.HasOne(x => x.Batch)
+            .WithMany(b => b.Items)
+            .HasForeignKey(x => x.BatchId)
+            .OnDelete(DeleteBehavior.SetNull);
         e.HasIndex(x => new { x.TaskId, x.RequestedAt });
         e.HasIndex(x => x.Status);
+        e.HasIndex(x => x.ScraperConfigId);
+        e.HasIndex(x => x.BatchId);
     }
 }

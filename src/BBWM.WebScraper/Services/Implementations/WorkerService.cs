@@ -2,6 +2,7 @@ using AutoMapper;
 using BBWM.Core.Data;
 using BBWM.WebScraper.Dtos;
 using BBWM.WebScraper.Entities;
+using BBWM.WebScraper.Enums;
 using BBWM.WebScraper.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 

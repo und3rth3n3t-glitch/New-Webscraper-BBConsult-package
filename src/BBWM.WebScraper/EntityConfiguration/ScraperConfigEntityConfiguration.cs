@@ -21,6 +21,10 @@ public class ScraperConfigEntityConfiguration : IEntityTypeConfiguration<Scraper
         e.Property(x => x.Domain).IsRequired().HasMaxLength(256);
         e.Property(x => x.ConfigJson).HasConversion(JsonConverter).IsRequired();
         e.Property(x => x.SchemaVersion).HasDefaultValue(3);
+        e.Property(x => x.OriginClientId).HasMaxLength(450);
+        // D1.c — concurrency token; EF adds WHERE Version = X to UPDATE statements.
+        e.Property(x => x.Version).IsConcurrencyToken().HasDefaultValue(1);
         e.HasIndex(x => x.UserId);
+        e.HasIndex(x => new { x.UserId, x.Shared });
     }
 }

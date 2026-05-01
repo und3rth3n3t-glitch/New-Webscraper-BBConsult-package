@@ -22,4 +22,12 @@ public class ScraperHubWorkerNotifier : IWorkerNotifier
 
     public Task SendResumeAfterPauseAsync(string connectionId, string taskId, CancellationToken ct = default)
         => _hub.Clients.Client(connectionId).SendAsync("ResumeAfterPause", taskId, ct);
+
+    // D4.b — server→client aggregate batch progress, scoped to the batch owner's user group.
+    public Task SendBatchProgressToUserAsync(string userId, BatchProgressDto progress, CancellationToken ct = default)
+        => _hub.Clients.Group($"user:{userId}").SendAsync("BatchProgress", progress, ct);
+
+    // D5.d.c — notify subscribers when a shared config they're tracking is deleted.
+    public Task SendConfigDeletedToUserAsync(string userId, Guid configId, CancellationToken ct = default)
+        => _hub.Clients.Group($"user:{userId}").SendAsync("ScraperConfigDeleted", configId.ToString(), ct);
 }

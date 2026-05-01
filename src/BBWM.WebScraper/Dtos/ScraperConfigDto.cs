@@ -15,6 +15,7 @@ public class ScraperConfigDto
     public DateTimeOffset? LastSyncedAt { get; set; }
     public string? OriginClientId { get; set; }
     public string? OriginWorkerName { get; set; }
+    public int Version { get; set; }
 }
 
 public class CreateScraperConfigDto
@@ -24,7 +25,7 @@ public class CreateScraperConfigDto
     public string Domain { get; set; } = "";
     public JsonElement ConfigJson { get; set; }
     public int SchemaVersion { get; set; } = 3;
-    public bool Shared { get; set; } = false;
+    public bool Shared { get; set; }
 }
 
 public class ScraperConfigSubscriberDto

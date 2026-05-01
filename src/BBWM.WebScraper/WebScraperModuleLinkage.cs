@@ -1,6 +1,7 @@
 using System.Reflection;
 using BBWM.Core.ModuleLinker;
 using BBWM.WebScraper.Hubs;
+using BBWM.WebScraper.Services.Expansion;
 using BBWM.WebScraper.Services.Hubs;
 using BBWM.WebScraper.Services.Implementations;
 using BBWM.WebScraper.Services.Interfaces;
@@ -22,13 +23,24 @@ public class WebScraperModuleLinkage :
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        // Domain services
         services.AddScoped<IScraperConfigService, ScraperConfigService>();
         services.AddScoped<ITaskService, TaskService>();
         services.AddScoped<IRunService, RunService>();
+        services.AddScoped<IRunBatchService, RunBatchService>();
         services.AddScoped<IWorkerService, WorkerService>();
+
+        // Infrastructure
         services.AddScoped<IWorkerNotifier, ScraperHubWorkerNotifier>();
-        // NB: AutoMapper profile is auto-discovered by host's services.AddAutoMapper(bbAssemblies)
-        //     in BBWT.Server/Startup.cs:276. Do NOT register it here.
+        services.AddScoped<ITaskValidator, TaskValidator>();
+        services.AddScoped<IQueueExpansionService, QueueExpansionService>();
+        services.AddScoped<IRunCsvExporter, RunCsvExporter>();
+
+        // Block expanders — registered as a collection; QueueExpansionService consumes IEnumerable<IBlockExpander>.
+        services.AddScoped<IBlockExpander, LoopBlockExpander>();
+        services.AddScoped<IBlockExpander, ScrapeBlockExpander>();
+
+        // AutoMapper profile auto-discovered by host's AddAutoMapper(bbAssemblies) — do NOT register here.
     }
 
     public void MapHubs(IEndpointRouteBuilder routes)

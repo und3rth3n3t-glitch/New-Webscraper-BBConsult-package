@@ -1,0 +1,37 @@
+using BBWM.WebScraper.Dtos;
+
+namespace BBWM.WebScraper.Services.Interfaces;
+
+public enum RunBatchOutcome
+{
+    Created,
+    NotFound,
+    Forbidden,
+    WorkerOffline,
+    BatchEmpty,
+    BatchTooLarge,
+    NestedLoopUnsupported,
+}
+
+public record RunBatchDispatchResult(
+    RunBatchOutcome Outcome,
+    Guid? BatchId,
+    int DispatchedCount,
+    int FailedCount,
+    string? Error);
+
+public enum RunBatchExportOutcome { Ok, NotFound, Forbidden, BadFormat }
+
+public record RunBatchExportResult(
+    RunBatchExportOutcome Outcome,
+    byte[]? Bytes,
+    string? Filename,
+    string? ContentType);
+
+public interface IRunBatchService
+{
+    Task<RunBatchDispatchResult> CreateAndDispatchAsync(string userId, Guid taskId, Guid workerId, CancellationToken ct = default);
+    Task<RunBatchDetailDto?> GetAsync(string userId, Guid batchId, CancellationToken ct = default);
+    Task<PagedResultDto<RunBatchListItemDto>> ListAsync(string userId, RunBatchListQueryDto query, CancellationToken ct = default);
+    Task<RunBatchExportResult> ExportAsync(string userId, Guid batchId, string format, CancellationToken ct = default);
+}
