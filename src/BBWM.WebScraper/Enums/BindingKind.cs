@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace BBWM.WebScraper.Enums;
 
 // Used inside ScrapeBlockConfig.stepBindings JSONB payloads.
-// Stored as text via System.Text.Json's JsonStringEnumConverter (camelCase).
+// Wire format: camelCase strings ("literal"/"loopRef"/"unbound") via JsonStringEnumConverter.
+[JsonConverter(typeof(CamelCaseStringEnumConverter))]
 public enum BindingKind
 {
     Literal,
