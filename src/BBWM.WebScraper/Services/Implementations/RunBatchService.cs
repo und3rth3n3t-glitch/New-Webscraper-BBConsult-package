@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using AutoMapper;
 using BBWM.Core.Data;
@@ -19,6 +18,14 @@ public class RunBatchService : IRunBatchService
     private readonly IWorkerNotifier _notifier;
     private readonly IRunCsvExporter _csv;
     private readonly ILogger<RunBatchService> _log;
+
+    // Matches the camelCase pattern used elsewhere in the module (TaskService, RunService) so
+    // JSON exported here aligns with what the rest of the system writes.
+    private static readonly JsonSerializerOptions _camelCaseJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
 
     public RunBatchService(
         IDbContext db,
@@ -201,23 +208,20 @@ public class RunBatchService : IRunBatchService
 
         var batchIds = batches.Select(b => b.Id).ToList();
         var aggregates = batchIds.Count == 0
-            ? new List<dynamic>()
-            : (await _db.Set<RunItem>()
+            ? new List<BatchAggregate>()
+            : await _db.Set<RunItem>()
                 .AsNoTracking()
                 .Where(r => r.BatchId != null && batchIds.Contains(r.BatchId!.Value))
                 .GroupBy(r => r.BatchId!.Value)
-                .Select(g => new
-                {
-                    BatchId = g.Key,
-                    Total = g.Count(),
-                    Completed = g.Count(r => r.Status == RunItemStatus.Completed),
-                    Failed    = g.Count(r => r.Status == RunItemStatus.Failed || r.Status == RunItemStatus.Cancelled),
-                    Pending   = g.Count(r => r.Status == RunItemStatus.Pending || r.Status == RunItemStatus.Sent
-                                          || r.Status == RunItemStatus.Running || r.Status == RunItemStatus.Paused),
-                })
-                .ToListAsync(ct))
-                .Cast<dynamic>().ToList();
-        var aggMap = aggregates.ToDictionary(a => (Guid)a.BatchId);
+                .Select(g => new BatchAggregate(
+                    g.Key,
+                    g.Count(),
+                    g.Count(r => r.Status == RunItemStatus.Completed),
+                    g.Count(r => r.Status == RunItemStatus.Failed || r.Status == RunItemStatus.Cancelled),
+                    g.Count(r => r.Status == RunItemStatus.Pending || r.Status == RunItemStatus.Sent
+                              || r.Status == RunItemStatus.Running || r.Status == RunItemStatus.Paused)))
+                .ToListAsync(ct);
+        var aggMap = aggregates.ToDictionary(a => a.BatchId);
 
         var items = batches.Select(b =>
         {
@@ -230,10 +234,10 @@ public class RunBatchService : IRunBatchService
                 WorkerId = b.WorkerId,
                 WorkerName = b.Worker?.Name ?? "",
                 CreatedAt = b.CreatedAt,
-                TotalItems = a is null ? 0 : (int)a.Total,
-                CompletedCount = a is null ? 0 : (int)a.Completed,
-                FailedCount = a is null ? 0 : (int)a.Failed,
-                PendingCount = a is null ? 0 : (int)a.Pending,
+                TotalItems     = a is null ? 0 : a.Total,
+                CompletedCount = a is null ? 0 : a.Completed,
+                FailedCount    = a is null ? 0 : a.Failed,
+                PendingCount   = a is null ? 0 : a.Pending,
             };
         }).ToList();
 
@@ -264,27 +268,26 @@ public class RunBatchService : IRunBatchService
 
         if (fmt == "json")
         {
-            var envelope = new StringBuilder();
-            envelope.Append("{\"batchId\":\"").Append(batch.Id).Append("\",\"items\":[");
-            var first = true;
-            foreach (var run in items)
+            var envelope = new
             {
-                if (!first) envelope.Append(',');
-                first = false;
-                envelope.Append("{\"runId\":\"").Append(run.Id).Append("\",\"iterationLabel\":");
-                envelope.Append(JsonSerializer.Serialize(run.IterationLabel));
-                envelope.Append(",\"status\":");
-                envelope.Append(JsonSerializer.Serialize(run.Status.ToString().ToLowerInvariant()));
-                envelope.Append(",\"result\":");
-                envelope.Append(run.ResultJsonb is null ? "null" : run.ResultJsonb.RootElement.GetRawText());
-                envelope.Append('}');
-            }
-            envelope.Append("]}");
-            var jsonBytes = Encoding.UTF8.GetBytes(envelope.ToString());
+                batchId = batch.Id,
+                items = items.Select(run => new
+                {
+                    runId = run.Id,
+                    iterationLabel = run.IterationLabel,
+                    status = run.Status.ToString().ToLowerInvariant(),
+                    // ResultJsonb?.RootElement gives JsonElement? — System.Text.Json serialises it
+                    // as raw embedded JSON (not stringified), and writes `null` when it's null.
+                    result = run.ResultJsonb?.RootElement,
+                }),
+            };
+            var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(envelope, _camelCaseJson);
             return new RunBatchExportResult(RunBatchExportOutcome.Ok, jsonBytes, $"batch-{batch.Id}.json", "application/json");
         }
 
         var csvBytes = _csv.ExportBatch(batch, items, null);
         return new RunBatchExportResult(RunBatchExportOutcome.Ok, csvBytes, $"batch-{batch.Id}.csv", "text/csv");
     }
+
+    private sealed record BatchAggregate(Guid BatchId, int Total, int Completed, int Failed, int Pending);
 }

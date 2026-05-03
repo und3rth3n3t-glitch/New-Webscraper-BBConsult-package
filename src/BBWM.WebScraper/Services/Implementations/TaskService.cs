@@ -1,5 +1,4 @@
 using System.Text.Json;
-using AutoMapper;
 using BBWM.Core.Data;
 using BBWM.WebScraper.Dtos;
 using BBWM.WebScraper.Entities;
@@ -12,13 +11,11 @@ namespace BBWM.WebScraper.Services.Implementations;
 public class TaskService : ITaskService
 {
     private readonly IDbContext _db;
-    private readonly IMapper _mapper;
     private readonly ITaskValidator _validator;
 
-    public TaskService(IDbContext db, IMapper mapper, ITaskValidator validator)
+    public TaskService(IDbContext db, ITaskValidator validator)
     {
         _db = db;
-        _mapper = mapper;
         _validator = validator;
     }
 
@@ -108,12 +105,23 @@ public class TaskService : ITaskService
         return DeleteTaskOutcome.Deleted;
     }
 
+    // CamelCase property naming so the persisted JSON matches what
+    // QueueExpansionService + LoopBlockExpander + ScrapeBlockExpander look up
+    // (they read "scraperConfigId", "name", "values", "columns", "rows", etc.).
+    // Without this, default System.Text.Json writes PascalCase ("ScraperConfigId")
+    // and expansion silently treats every Scrape block as having no config.
+    private static readonly JsonSerializerOptions _camelCaseJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
+
     private static JsonDocument SerializeBlockConfig(TaskBlockTreeDto b)
     {
         return b.BlockType switch
         {
-            BlockType.Loop => JsonSerializer.SerializeToDocument(b.Loop ?? new LoopBlockConfigDto()),
-            BlockType.Scrape => JsonSerializer.SerializeToDocument(b.Scrape ?? new ScrapeBlockConfigDto()),
+            BlockType.Loop => JsonSerializer.SerializeToDocument(b.Loop ?? new LoopBlockConfigDto(), _camelCaseJson),
+            BlockType.Scrape => JsonSerializer.SerializeToDocument(b.Scrape ?? new ScrapeBlockConfigDto(), _camelCaseJson),
             _ => JsonDocument.Parse("{}"),
         };
     }
@@ -127,10 +135,10 @@ public class TaskService : ITaskService
             BlockType = b.BlockType,
             OrderIndex = b.OrderIndex,
             Loop = b.BlockType == BlockType.Loop
-                ? JsonSerializer.Deserialize<LoopBlockConfigDto>(b.ConfigJsonb.RootElement.GetRawText())
+                ? JsonSerializer.Deserialize<LoopBlockConfigDto>(b.ConfigJsonb.RootElement.GetRawText(), _camelCaseJson)
                 : null,
             Scrape = b.BlockType == BlockType.Scrape
-                ? JsonSerializer.Deserialize<ScrapeBlockConfigDto>(b.ConfigJsonb.RootElement.GetRawText())
+                ? JsonSerializer.Deserialize<ScrapeBlockConfigDto>(b.ConfigJsonb.RootElement.GetRawText(), _camelCaseJson)
                 : null,
         }).OrderBy(b => b.OrderIndex).ToList();
 
@@ -139,7 +147,7 @@ public class TaskService : ITaskService
             .Where(b => b.BlockType == BlockType.Loop)
             .SelectMany(b =>
             {
-                var loop = JsonSerializer.Deserialize<LoopBlockConfigDto>(b.ConfigJsonb.RootElement.GetRawText());
+                var loop = JsonSerializer.Deserialize<LoopBlockConfigDto>(b.ConfigJsonb.RootElement.GetRawText(), _camelCaseJson);
                 return loop?.Values ?? new List<string>();
             })
             .Distinct()

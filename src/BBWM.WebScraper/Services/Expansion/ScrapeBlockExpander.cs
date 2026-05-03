@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using BBWM.WebScraper.Dtos;
 using BBWM.WebScraper.Entities;
 using BBWM.WebScraper.Enums;
 
@@ -7,6 +8,12 @@ namespace BBWM.WebScraper.Services.Expansion;
 
 public class ScrapeBlockExpander : IBlockExpander
 {
+    private static readonly JsonSerializerOptions _camelCaseJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
+
     public BlockType Handles => BlockType.Scrape;
 
     public IEnumerable<ExpansionResult> Expand(TaskBlock block, ExpansionContext ctx, ExpansionFrame frame)
@@ -43,7 +50,7 @@ public class ScrapeBlockExpander : IBlockExpander
 
                 switch (binding.Kind)
                 {
-                    case "literal":
+                    case BindingKind.Literal:
                         if (stepNode["options"] is not JsonObject opts)
                         {
                             opts = new JsonObject();
@@ -52,7 +59,7 @@ public class ScrapeBlockExpander : IBlockExpander
                         opts["literalValue"] = binding.Value ?? "";
                         break;
 
-                    case "loopRef":
+                    case BindingKind.LoopRef:
                         if (binding.Column is not null && binding.LoopBlockId.HasValue)
                         {
                             var assignmentKey = $"{binding.LoopBlockId.Value}:{binding.Column}";
@@ -74,7 +81,8 @@ public class ScrapeBlockExpander : IBlockExpander
                         }
                         break;
 
-                    default: // "unbound"
+                    case BindingKind.Unbound:
+                    default:
                         ctx.Warnings.Add(new ExpansionWarning(ExpansionWarningCodes.BindingUnbound,
                             BlockId: block.Id, ScraperConfigId: config.Id, StepId: stepId));
                         break;
@@ -101,7 +109,7 @@ public class ScrapeBlockExpander : IBlockExpander
             SearchTerms: new List<string>(frame.SearchTerms));
     }
 
-    private static (Guid scraperConfigId, Dictionary<string, BindingPayload> bindings) ReadScrapeConfig(TaskBlock block)
+    private static (Guid scraperConfigId, Dictionary<string, StepBindingDto> bindings) ReadScrapeConfig(TaskBlock block)
     {
         var root = block.ConfigJsonb.RootElement;
         var configIdStr = root.TryGetProperty("scraperConfigId", out var cid) && cid.ValueKind == JsonValueKind.String
@@ -109,27 +117,21 @@ public class ScrapeBlockExpander : IBlockExpander
         if (!Guid.TryParse(configIdStr, out var configId))
             return (Guid.Empty, new());
 
-        var bindings = new Dictionary<string, BindingPayload>();
+        var bindings = new Dictionary<string, StepBindingDto>();
         if (root.TryGetProperty("stepBindings", out var b) && b.ValueKind == JsonValueKind.Object)
         {
             foreach (var prop in b.EnumerateObject())
             {
-                var kindStr = prop.Value.TryGetProperty("kind", out var k) && k.ValueKind == JsonValueKind.String
-                    ? k.GetString() : null;
-                if (kindStr is null) continue;
-
-                var column = prop.Value.TryGetProperty("column", out var col) && col.ValueKind == JsonValueKind.String
-                    ? col.GetString() : null;
-
-                var payload = new BindingPayload(kindStr,
-                    prop.Value.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null,
-                    prop.Value.TryGetProperty("loopBlockId", out var l) && l.ValueKind == JsonValueKind.String && Guid.TryParse(l.GetString(), out var lg) ? lg : null,
-                    column);
-                bindings[prop.Name] = payload;
+                // Defensive: drop payloads with no "kind" string. Without this guard, a malformed
+                // payload would deserialise to BindingKind.Literal (default enum value 0), silently
+                // changing semantics. This matches the pre-refactor behaviour of skipping the binding.
+                if (!prop.Value.TryGetProperty("kind", out var k) || k.ValueKind != JsonValueKind.String)
+                    continue;
+                var binding = prop.Value.Deserialize<StepBindingDto>(_camelCaseJson);
+                if (binding is null) continue;
+                bindings[prop.Name] = binding;
             }
         }
         return (configId, bindings);
     }
-
-    private record BindingPayload(string Kind, string? Value, Guid? LoopBlockId, string? Column = null);
 }

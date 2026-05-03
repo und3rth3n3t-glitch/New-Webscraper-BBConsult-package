@@ -1,14 +1,14 @@
 using BBWM.Core.Web.Extensions;
+using BBWM.WebScraper.Authentication;
 using BBWM.WebScraper.Dtos;
 using BBWM.WebScraper.Services.Interfaces;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
 namespace BBWM.WebScraper.Hubs;
 
-[Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme + ",Bearer")]
+[Authorize(AuthenticationSchemes = WebScraperAuthenticationDefaults.AuthenticationScheme)]
 public class ScraperHub : Hub
 {
     private readonly IWorkerService _workers;
@@ -27,7 +27,7 @@ public class ScraperHub : Hub
         var userId = Context.GetHttpContext()?.GetUserId();
         if (!string.IsNullOrEmpty(userId))
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"user:{userId}");
+            await Groups.AddToGroupAsync(Context.ConnectionId, ScraperHubGroups.UserGroup(userId));
         }
         await base.OnConnectedAsync();
     }

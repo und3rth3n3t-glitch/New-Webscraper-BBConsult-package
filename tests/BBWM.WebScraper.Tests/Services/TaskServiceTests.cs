@@ -14,12 +14,11 @@ public class TaskServiceTests
 {
     private static (TaskService svc, Mock<ITaskValidator> validatorMock) CreateService(TestWebScraperDbContext db)
     {
-        var mapper = TestDb.CreateMapper();
         var validatorMock = new Mock<ITaskValidator>();
         validatorMock
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<SaveTaskDto>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ValidationErrorDto>());
-        var svc = new TaskService(db, mapper, validatorMock.Object);
+        var svc = new TaskService(db, validatorMock.Object);
         return (svc, validatorMock);
     }
 
@@ -103,12 +102,11 @@ public class TaskServiceTests
     public async Task SaveAsync_WithValidatorErrors_ReturnsValidationFailed()
     {
         using var db = TestDb.CreateInMemory();
-        var mapper = TestDb.CreateMapper();
         var validatorMock = new Mock<ITaskValidator>();
         validatorMock
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<SaveTaskDto>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ValidationErrorDto> { new() { Code = ValidationCodes.MissingTaskName } });
-        var svc = new TaskService(db, mapper, validatorMock.Object);
+        var svc = new TaskService(db, validatorMock.Object);
 
         var result = await svc.SaveAsync("user1", null, new SaveTaskDto { Name = "" });
 
